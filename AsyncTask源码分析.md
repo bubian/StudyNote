@@ -80,7 +80,6 @@ AsyncTask异步任务初始化:
 			0002-异步任务执行顺序队列变量初始化：
 				 public static final Executor SERIAL_EXECUTOR = new SerialExecutor();//这个内部类实现了异步任务的串行执行。
 				
-
 		AsyncTask构造函数:
 
 			public AsyncTask() {
@@ -192,8 +191,8 @@ AsyncTask异步任务初始化:
 
 	每执行一次execute方法，就会向mTasks（双端队列）的队尾插入一个Runnable对象。当第一次执行异步任务的时候，mActive等于null，
 	所以会从队列里面取出第一个utureTask对象，THREAD_POOL_EXECUTOR（创建的线程池对象）调用execute方法开始执行。当前任务执行完成后
-	会执行到刚才向mTasks添加的Runable的run方面，从而执行传递过来的FutureTask对象的run方法，FutureTask实现了RunnableFuture接口，RunnableFuture继承了Runable和Future接口。
-	那么FutureTask对象的run方法里面都做了什么操作呢？
+	会执行到刚才向mTasks添加的Runable的run方面，从而执行传递过来的FutureTask对象的run方法，FutureTask实现了RunnableFuture接口，
+	RunnableFuture继承了Runable和Future接口。那么FutureTask对象的run方法里面都做了什么操作呢？
 
 <font color=#0000ff size=3 face="黑体">	
 执行耗时的后台任务：r.run;
@@ -243,8 +242,8 @@ AsyncTask异步任务初始化:
 		    this.state = NEW;       也是在异步任务未执行前初始化的。
     	}
 	
-	result = c.call()，c就是等于构造FutureTask对象时传递过来的WorkerRunnable对象，该对象实现了Callable接口里面的call方法，所有会去执行WorkerRunnable对象里的call()方法，
-	该对象在AsyncTask构造函数里面初始化的一个内部类。如下：
+	result = c.call()，c就是等于构造FutureTask对象时传递过来的WorkerRunnable对象，该对象实现了Callable接口里面的call方法，
+	所有会去执行WorkerRunnable对象里的call()方法，该对象在AsyncTask构造函数里面初始化的一个内部类。如下：
 	    public Result call() throws Exception {
             mTaskInvoked.set(true);
 
@@ -258,13 +257,14 @@ AsyncTask异步任务初始化:
 <font color=#0000ff size=3 face="黑体">	
 执行我们的耗时后台任务：doInBackground（Void... params）
 </font>	
-        @Override
-        protected Boolean doInBackground(Void... params) {
-            		...
-                publishProgress(progress);//必须执行这个方法，为什么请看publishProgress方法实现：
-                	...
-            return true;
-        }
+
+    @Override
+    protected Boolean doInBackground(Void... params) {
+        		...
+            publishProgress(progress);//必须执行这个方法，为什么请看publishProgress方法实现：
+            	...
+        return true;
+    }
 
 		
     protected final void publishProgress(Progress... values) {
@@ -278,6 +278,7 @@ AsyncTask异步任务初始化:
 <font color=#0000ff size=3 face="黑体">	
 Handler消息处理:
 </font>	
+
     private static class InternalHandler extends Handler {
         public InternalHandler() {
             super(Looper.getMainLooper());
@@ -304,23 +305,27 @@ Handler消息处理:
 <font color=#0000ff size=3 face="黑体">	
 解释为什么AsyncTask的对象必须在主线程中实例化
 </font>	
+
 	这个还得从上面InternalHandler类说起，在API 22以下的代码，会发现它没有这个构造函数
 	public InternalHandler() {
          super(Looper.getMainLooper());
     }
-	而是使用默认的；默认情况下，Handler会使用当前线程的Looper，如果你的AsyncTask是在子线程创建的，那么很不幸，你的onProgressUpdate(Integer... values)和onPostExecute并非在UI线程执行，而是被Handler post到创建子线程执行；如果你在这两个线程更新了UI，那么直接导致崩溃。这也是大家口口相传的AsyncTask必须在主线程创建的原因。
+	而是使用默认的；默认情况下，Handler会使用当前线程的Looper，如果你的AsyncTask是在子线程创建的，那么很不幸，你的onProgressUpdate(Integer... values)
+	和onPostExecute并非在UI线程执行，而是被Handler post到创建子线程执行；如果你在这两个线程更新了UI，那么直接导致崩溃。
+	这也是大家口口相传的AsyncTask必须在主线程创建的原因。
 
 	另外，AsyncTask里面的这个Handler是一个静态变量，也就是说它是在类加载的时候创建的；如果在你的APP进程里面，以前从来没有使用过AsyncTask，
 	然后在子线程使用AsyncTask的相关变量，那么导致静态Handler初始化，如果在API 16以下，那么会出现上面同样的问题；这也就是AsyncTask必须在主线程初始化 的原因。
 
-	事实上，在Android 4.1(API 16)以后，在APP主线程ActivityThread的main函数里面，直接调用了AscynTask.init函数确保这个类是在主线程初始化的，这样在使用异步任务之前，就能确保所用到的
-	Handler用的是主线程的Looper；
-	另外，init这个函数里面获取了InternalHandler的Looper，由于是在主线程执行的，因此，AsyncTask的Handler用的也是主线程的Looper。这个问题从而得到彻底的解决
+	事实上，在Android 4.1(API 16)以后，在APP主线程ActivityThread的main函数里面，直接调用了AscynTask.init函数确保这个类是在主线程初始化的，这样在使用异步任务之前，
+	就能确保所用到的Handler用的是主线程的Looper；另外，init这个函数里面获取了InternalHandler的Looper，由于是在主线程执行的，
+	因此，AsyncTask的Handler用的也是主线程的Looper。这个问题从而得到彻底的解决
 	
 		
 <font color=#0000ff size=3 face="黑体">	
 postResult(doInBackground(mParams));
 </font>
+
 	这时候，onProgressUpdate(Integer... values)在主线程更新UI，工作现在继续执行。
     private Result postResult(Result result) {
         @SuppressWarnings("unchecked")
@@ -330,6 +335,85 @@ postResult(doInBackground(mParams));
         return result;
     }
 
-	异步任务执行完成，调用finish方法，
+	异步任务执行完成，调用finish方法，finish方法如下：
+
+<font color=#0000ff size=3 face="黑体">	
+finish();
+</font>
+
+    private void finish(Result result) {
+        if (isCancelled()) {
+            onCancelled(result);
+        } else {
+            onPostExecute(result);
+        }
+        mStatus = Status.FINISHED;
+    }
 
 
+<font color=#0000ff size=3 face="黑体">	
+执行的大致流程是：
+</font>
+    
+    onPreExecute-> doInBackGround->onProgressUpdate(调用publishProgress的时候)->onPostExecute
+
+<font color=#0000ff size=3 face="黑体">		
+取消异步任务：
+</font>
+
+AsyncTask.cancel(mayInterruptIfRunning);
+
+    public final boolean cancel(boolean mayInterruptIfRunning) {
+        mCancelled.set(true);
+        return mFuture.cancel(mayInterruptIfRunning);
+    }
+
+FutureTask.cancel()：
+
+    public boolean cancel(boolean mayInterruptIfRunning) {
+		//检测当前状态是否是NEW,如果不是，说明任务已经完成或取消或中断，所以直接返回。
+        if (!(state == NEW &&
+              U.compareAndSwapInt(this, STATE, NEW,
+                  mayInterruptIfRunning ? INTERRUPTING : CANCELLED)))
+            return false;
+        try {   
+			/如果mayInterruptIfRunning为true的时候，线程就会调用interrupt()方法
+            if (mayInterruptIfRunning) {
+                try {
+                    Thread t = runner;
+                    if (t != null)
+						//调用interrupt方法，状态设置为INTERRUPTING，然后试着中断线程，完成后设置状态为INTERRUPTED
+                        t.interrupt();
+                } finally { // final state
+					//通知等待线程的结果（因为FutureTask.get()法获得计算结果的唯一方法，如果计算没有完成，此方法会堵塞直到计算完成）
+                    U.putOrderedInt(this, STATE, INTERRUPTED);
+                }
+            }
+        } finally {
+            finishCompletion();
+        }
+        return true;
+    }
+
+
+<font color=#0000ff size=3 face="黑体">		
+AsyncTask需要注意地方
+</font>
+
+1、AsyncTask的对象必须在主线程中实例化，execute方法也要在主线程调用(查看3.1节-AsyncTask构造函数)
+
+2、同一个AsyncTask任务只能被执行一次，即只能调用一次execute方法，多次调用时将会抛异常（查看3.2里面的第二小节）
+
+3、cancel()方法无法直接中断子线程，只是更改了中断的标志位。控制异步任务执行结束后不会回调onPostExecute()。正确的取消异步任务要cancel()方法+doInbacground()做判断跳出循环
+
+4、AsyncTask在Activit通常作为匿名的内部类来使用，如果 AsyncTask 中的异步任务在 Activity 退出时还没执行完或者阻塞了，那么这个保持的外部的 Activity 实例得不到释放（内部类保持隐式外部类的实例的引用），最后导致会引起OOM，解决办法是：在 AsyncTask 使用弱引用外部实例，或者保证在 Activity 退出时，所有的 AsyncTask 已执行完成或被取消
+
+5、会产生阻塞问题，尤其是单任务顺序执行的情况下，一个任务执行时间过长会阻塞其他任务的执行
+
+6、不建议使用AsyncTask进行网络操作
+AsyncTasks should ideally be used for short operations (a few seconds at the most.) If you need to keep threads running for long periods of time, it is highly recommended you use the various APIs。
+Android文档中有写到AsyncTask应该处理几秒钟的操作（通常为轻量的本地IO操作），由于网络操作存在不确定性，可能达到几秒以上，所以不建议使用。
+
+
+##-----------------------------AsyncTasks-------------------------
+作为Runnable被线程执行，同时将Callable作为构造函数的参数传入，这样组合的好处是，假设有一个很耗时的返回值需要计算，并且这个返回值不是立刻需要的话，就可以使用这个组合，用另一个线程去计算返回值，而当前线程在使用这个返回值之前可以做其它的操作，等到需要这个返回值时，再通过Future得到。FutureTask的run方法要开始回调WorkerRunable的call方法了，call里面调用doInBackground(mParams),终于回到我们后台任务了，调用我们AsyncTask子类的doInBackground(),由此可以看出doInBackground()是在子线程中执行的，如下图所示 
