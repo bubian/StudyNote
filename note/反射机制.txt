@@ -1,0 +1,32 @@
+1.反射:
+	在运行时可以获取任意 Class 或 Object 内部所有成员属性，如成员变量、成员方法、构造函数和 Annotation。
+
+2.打印成员变量：
+	Java 里提供了 Field 这个类来表示成员变量，提供了 clazz.getDeclaredFields() 来获取一个类内部声明的所有变量。因此，可以利用下面的代码获取 clazz 内部所有的成员变量。
+		Field[] fields = userBeanClass.getDeclaredFields();
+
+	将一个 field 对象打印成 private String userName:
+	Field 里包含了三种元素来对应它们，分别是Modifier、Type、Name。
+		1 private <-- field.getModifiers();
+		2 String <-- field.getType();
+		3 userName <-- field.getName();
+
+3.打印成员方法:
+	类似成员变量的 Field，成员方法也有对应的类 Method，首先可以通过 Method[] methods = clazz.getDeclaredMethods(); 获得所有的成员方法，然后，为了打印形如：public static void staticMethod(String devName)的数据，可以利用下列 method 提供的方法：
+	1 private static <-- method.getModifiers();
+	2 void <-- method.getReturnType();
+	3 staticMethod <-- method.getName();
+	4 String <-- method.getParameterTypes();
+
+4.打印构造函数:
+	其实构造函数和成员函数非常类似，Java 里提供了 Constructor 来表示构造函数：
+	Constructor[] constructors = userBeanClass.getDeclaredConstructors();
+
+5.调用 Class 内部的用 @Invoke 修饰的方法:
+	1 判断这个方法是否被 @Invoke 修饰
+  2 如果修饰，判断这个方法是不是 static 的
+	3 如果是 static，则可以直接用 class 调用
+	4 如果不是 static，那就需要实例化一个对象来调用
+	5 如果这个方法是 private 的，要记得 setAccessible(true)
+	
+		

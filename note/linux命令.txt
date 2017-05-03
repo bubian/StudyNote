@@ -1,0 +1,6 @@
+修改权限:
+	mount -o remount rw /system
+u disk路径:
+	/mnt/sda/sda1/
+拷贝命令:
+	cp -rf source_path /system/lib

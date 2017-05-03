@@ -413,7 +413,3 @@ AsyncTask需要注意地方
 6、不建议使用AsyncTask进行网络操作
 AsyncTasks should ideally be used for short operations (a few seconds at the most.) If you need to keep threads running for long periods of time, it is highly recommended you use the various APIs。
 Android文档中有写到AsyncTask应该处理几秒钟的操作（通常为轻量的本地IO操作），由于网络操作存在不确定性，可能达到几秒以上，所以不建议使用。
-
-
-##-----------------------------AsyncTasks-------------------------
-作为Runnable被线程执行，同时将Callable作为构造函数的参数传入，这样组合的好处是，假设有一个很耗时的返回值需要计算，并且这个返回值不是立刻需要的话，就可以使用这个组合，用另一个线程去计算返回值，而当前线程在使用这个返回值之前可以做其它的操作，等到需要这个返回值时，再通过Future得到。FutureTask的run方法要开始回调WorkerRunable的call方法了，call里面调用doInBackground(mParams),终于回到我们后台任务了，调用我们AsyncTask子类的doInBackground(),由此可以看出doInBackground()是在子线程中执行的，如下图所示 
