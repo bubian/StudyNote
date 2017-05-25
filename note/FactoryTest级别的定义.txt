@@ -1,3 +1,7 @@
+本文简析Android内置的Factory Test（有测试模式/工厂模式/工程模式等叫法）框架，并非讲解FactoryTest中的每个测试该怎么写。
+ 
+Android框架中已经对FactoryTest做了支持，通过一些配置和开发工作就可以把FactoryTest代码融入到Android系统中。
+
 一、FactoryTest级别的定义:
 
 	Android系统中在com.android.server.SystemServer(loc:frameworks/base/services/Java/)中对FactoryTest的级别做了定义：
