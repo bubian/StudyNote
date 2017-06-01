@@ -1,0 +1,264 @@
+  NullWebViewFactoryProvider implements WebViewFactoryProvider
+   WebViewChromiumFactoryProvider implements WebViewFactoryProvider
+
+
+1----
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        return mProvider.getViewDelegate().dispatchKeyEvent(event); --->WebViewChromium.dispatchKeyEvent(event)
+    }
+                
+    mProvider = getFactory().createWebView(this, new PrivateAccess());
+
+mProvider:
+
+mProvider = getFactory().createWebView(this, new PrivateAccess());
+
+getFactory()；WebViewChromiumFactoryProvider
+
+    private static synchronized WebViewFactoryProvider getFactory() {
+        return WebViewFactory.getProvider();
+    }
+    
+        @Override
+    public WebViewProvider createWebView(WebView webView, WebView.PrivateAccess privateAccess) {
+        WebViewChromium wvc = new WebViewChromium(this, webView, privateAccess);
+
+        synchronized (mLock) {
+            if (mWebViewsToStart != null) {
+                mWebViewsToStart.add(new WeakReference<WebViewChromium>(wvc));
+            }
+        }
+
+        return wvc;
+    }
+    
+        @Override
+    // This needs to be kept thread safe!
+    public WebViewProvider.ViewDelegate getViewDelegate() {
+        return this;
+    }
+    
+----------------------------WebViewChromium----------------------
+        @Override
+    public boolean dispatchKeyEvent(final KeyEvent event) {
+        mFactory.startYourEngines(false);
+        if (checkNeedsPost()) {
+            boolean ret = runOnUiThreadBlocking(new Callable<Boolean>() {
+                @Override
+                public Boolean call() {
+                    return dispatchKeyEvent(event);
+                }
+            });
+            return ret;
+        }
+        return mAwContents.dispatchKeyEvent(event);
+    }
+    
+ mFactory: = WebViewChromiumFactoryProvider对象
+ 
+     void startYourEngines(boolean onMainThread) {
+        synchronized (mLock) {
+            ensureChromiumStartedLocked(onMainThread);
+
+        }
+    }
+    
+     
+return mAwContents.dispatchKeyEvent(event);
+
+
+mAwContents：
+
+        Context ctx = resourcesContextWrapper(mWebView.getContext());
+        mAwContents = new AwContents(mFactory.getBrowserContext(), mWebView, ctx,
+                new InternalAccessAdapter(), new WebViewNativeGLDelegate(),
+                mContentsClientAdapter, mWebSettings.getAwSettings());
+                
+                
+        AwViewMethodsImpl（内部类）
+        
+                @Override
+        public boolean dispatchKeyEvent(KeyEvent event) {
+            if (isDpadEvent(event)) {
+                mSettings.setSpatialNavigationEnabled(true);
+            }
+            return mContentViewCore.dispatchKeyEvent(event);
+        }
+        
+        isDpadEvent(event)：
+        
+                private boolean isDpadEvent(KeyEvent event) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                switch (event.getKeyCode()) {
+                    case KeyEvent.KEYCODE_DPAD_CENTER:
+                    case KeyEvent.KEYCODE_DPAD_DOWN:
+                    case KeyEvent.KEYCODE_DPAD_UP:
+                    case KeyEvent.KEYCODE_DPAD_LEFT:
+                    case KeyEvent.KEYCODE_DPAD_RIGHT:
+                        return true;
+                }
+            }
+            return false;
+        }
+        
+        mContentViewCore：ContentViewCore对象
+        
+                mContentViewCore = createAndInitializeContentViewCore(
+                mContainerView, mContext, mInternalAccessAdapter, nativeWebContents,
+                new AwGestureStateListener(), mContentViewClient, mZoomControls);
+                
+                        ContentViewCore contentViewCore = new ContentViewCore(context);
+        contentViewCore.initialize(containerView, internalDispatcher, nativeWebContents,
+                context instanceof Activity ?
+                        new ActivityWindowAndroid((Activity) context) :
+                        new WindowAndroid(context.getApplicationContext()));
+        contentViewCore.addGestureStateListener(gestureStateListener);
+        contentViewCore.setContentViewClient(contentViewClient);
+        contentViewCore.setZoomControlsDelegate(zoomControlsDelegate);
+ 
+ ---------------------------ContentViewCore----------------
+ 
+     /**
+     * @see View#dispatchKeyEvent(KeyEvent)
+     */
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (GamepadList.dispatchKeyEvent(event)) return true;
+        if (getContentViewClient().shouldOverrideKeyEvent(event)) {
+            return mContainerViewInternals.super_dispatchKeyEvent(event);
+        }
+
+        if (mImeAdapter.dispatchKeyEvent(event)) return true;
+
+        return mContainerViewInternals.super_dispatchKeyEvent(event);
+    }
+    
+    GamepadList.dispatchKeyEvent(event)：
+    
+        public static boolean dispatchKeyEvent(KeyEvent event) {
+        if (!isGamepadSupported()) return false;
+        if (!isGamepadEvent(event)) return false;
+        return getInstance().handleKeyEvent(event);
+    }
+
+    private boolean handleKeyEvent(KeyEvent event) {
+        synchronized (mLock) {
+            if (!mIsGamepadAccessed) return false;
+            GamepadDevice gamepad = getGamepadForEvent(event);
+            if (gamepad == null) return false;
+            return gamepad.handleKeyEvent(event);
+        }
+    }
+    
+        private static class LazyHolder {
+        private static final GamepadList INSTANCE = new GamepadList();
+    }
+    
+    
+        private boolean handleKeyEvent(KeyEvent event) {
+        synchronized (mLock) {
+            if (!mIsGamepadAccessed) return false;
+            GamepadDevice gamepad = getGamepadForEvent(event);
+            if (gamepad == null) return false;
+            return gamepad.handleKeyEvent(event);
+        }
+    }
+    
+        public boolean handleKeyEvent(KeyEvent event) {
+        // Ignore event if it is not for standard gamepad key.
+        if (!GamepadList.isGamepadEvent(event)) return false;
+        int keyCode = event.getKeyCode();
+        assert keyCode < 256;
+        // Button value 0.0 must mean fully unpressed, and 1.0 must mean fully pressed.
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            mRawButtons[keyCode] = 1.0f;
+        } else if (event.getAction() == KeyEvent.ACTION_UP) {
+            mRawButtons[keyCode] = 0.0f;
+        }
+        mTimestamp = event.getEventTime();
+
+        return true;
+    }
+    
+    getContentViewClient().shouldOverrideKeyEvent(event)：
+    
+        @VisibleForTesting
+    public ContentViewClient getContentViewClient() {
+        if (mContentViewClient == null) {
+            // We use the Null Object pattern to avoid having to perform a null check in this class.
+            // We create it lazily because most of the time a client will be set almost immediately
+            // after ContentView is created.
+            mContentViewClient = new ContentViewClient();
+            // We don't set the native ContentViewClient pointer here on purpose. The native
+            // implementation doesn't mind a null delegate and using one is better than passing a
+            // Null Object, since we cut down on the number of JNI calls.
+        }
+        return mContentViewClient;
+    }
+    
+    mContentViewClient = new ContentViewClient();
+    
+    
+ -------------------------ContentViewClient-----------------
+ 
+     public boolean shouldOverrideKeyEvent(KeyEvent event) {
+        int keyCode = event.getKeyCode();
+
+        if (!shouldPropagateKey(keyCode)) return true;
+
+        // We also have to intercept some shortcuts before we send them to the ContentView.
+        if (event.isCtrlPressed() && (
+                keyCode == KeyEvent.KEYCODE_TAB ||
+                keyCode == KeyEvent.KEYCODE_W ||
+                keyCode == KeyEvent.KEYCODE_F4)) {
+            return true;
+        }
+
+        return false;
+    }
+    
+    
+    
+    ContentView
+    
+    ContentViewCore文件
+    
+    createImeAdapter方法
+    
+    
+    WebViewChromium文件
+    
+    super_dispatchKeyEvent
+    
+            @Override
+        public boolean super_dispatchKeyEvent(KeyEvent event) {
+            return mWebViewPrivate.super_dispatchKeyEvent(event);
+        }
+        
+            public WebViewChromium(WebViewChromiumFactoryProvider factory, WebView webView,
+            WebView.PrivateAccess webViewPrivate) {
+        mWebView = webView;
+        mWebViewPrivate = webViewPrivate;
+        mHitTestResult = new WebView.HitTestResult();
+        mAppTargetSdkVersion = mWebView.getContext().getApplicationInfo().targetSdkVersion;
+        mFactory = factory;
+        mRunQueue = new WebViewChromiumRunQueue();
+        String webViewAssetPath = WebViewFactory.getLoadedPackageInfo().applicationInfo.sourceDir;
+        mWebView.getContext().getAssets().addAssetPath(webViewAssetPath);
+    }
+    
+    
+        protected final InputEventConsistencyVerifier mInputEventConsistencyVerifier =
+            InputEventConsistencyVerifier.isInstrumentationEnabled() ?
+                    new InputEventConsistencyVerifier(this, 0) : null;
+                    
+                    
+                    
+                    
+                            // WebKeyboardEvent
+        RawKeyDown,
+        KeyboardTypeFirst = RawKeyDown,   7
+        KeyDown,
+        KeyUp,
+        Char,
+        KeyboardTypeLast = Char, 10

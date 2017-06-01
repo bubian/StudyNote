@@ -1,0 +1,12 @@
+1.Android tcpdump抓包方法方法。
+
+	(1) 首先下载《Tcpdump工具包》，解压后有个tcpdump文件；
+  (2) 将tcpdump上传到设备中：adb push tcpdump /data/local/tcpdump （上传数据包）,adb shell chmod 6755 /data/local/tcpdump （设置tcpdump权限）
+  (3) 使用tcpdump抓包：adb shell su /data/local/tcpdump -p -vv -s 0 -w /sdcard/capture.pcap
+  (4) 下载并读取tcpdump，PC端可以使用wireshark查看数据包：adb pull /sdcard/capture.pcap（将数据包复制到电脑中）
+
+2.通过adb命令抓取网络包
+	
+	先adb root 然后adb shell tcpdump –I any –p –s 0 –w输出目录.pcap
+	
+	
