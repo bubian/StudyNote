@@ -1,0 +1,109 @@
+1.Unknown Source:
+
+	异常信息中经常会出现 "方法名"(Unknown Source)的内容。这样加大了我们正确定位Crash发生的原因的难度。
+	
+	导致Unknown Source的出现以下两点原先：
+	
+		(1) 执行javac时丢失了文件名和行号：
+				为此我们进行javac编译时要保留debug信息：<javac debug="true" debuglevel="source,lines" ......>
+		(2) 执行混淆时丢失了文件名和行号：
+				为此，我们要在ProGuard文件加这条语句：-keeppattributes SourceFile，LineNumberTable
+				
+2.Java语法相关的异常：
+
+	(1) 空指针                          --- NullPointException
+	(2) 角标越界                        --- IndexOutOfBoundsException | StringIndexOutOfBoundsException | ArrayIndexOutOfBoundsException
+	(3) 试图调用一个空对象的方法  			--- Attempt to invoke virtual method on a null object reference
+	(4) 类型转换异常              			--- ClassCastException:class A cannot be cast to class B
+			解析:这类Crash都是由于强制类型转换导致，可以使用安全类型转换函数来转换。
+	(5) 数字转换错误              			--- NumberFormatException
+			解析:在数字类型转换过程中，如果转换不成功，一般会抛ClassCastException的异常，只有一个例外情况，当字符型转换为数字失败时，Android系统会抛出NumberFormatException异常，如
+			String a = "12xxx45";
+			int r = Integer.parseInt(a);
+	(6) 声明数组时长度为-1        			--- NegativeArraySizeException  
+			解析:数组大小为负值异常。
+	(7) 遍历集合同时删除其中的元素 			--- ConcurrentModificationException
+			1. 遍历集合的时候，不能删除该集合中的元素，不然会导致崩溃。可以先用一个集合记录下要删除的元素，遍历完后在删除。
+			2. 在多个线程中删除同一个线程步安全的集合中的元素，也会产生这个异常。
+	(8) 比较器使用不当                  --- Comparison method violates its general contract
+			解析:这个错误是因为Comparator的compare方法使用姿势不对导致的。Comparator是基于插入排序和归并排序算法相结合的产物，要比使用的冒泡排序快很多，但缺点是不易掌握。
+			比如：
+					 List<Double> list = new ArrayList<Double>();
+					 list.add(11.1);
+					 list.add(11.1);
+					 list.add(31.1);
+					 list.add(21.1);
+					 list.add(41.1);
+					 list.add(11.7);
+					 list.add(11.8);
+					 //这种写法正确
+					 Comparator<Double> comparator = new Comparator<Double>{
+					 	public int compare(Double d1,Double d2){
+					 		if(d1 < d2){
+					 			return -1;
+					 		}else if(d1 > d2){
+					 			return 1;
+					 		}else{
+					 			return 0;
+					 		}
+					 	}
+					 	
+					 	//下面这种写法错误,忽略了p1和p2相等的情况，这时应该返回0，当数组或者集合中的元素以某种方式排序的时候，就会报这个错误。
+					 	public int compare(Double d1,Double d2){
+					 		return p1 > p2 ? 1 : -1;
+					 	} 	
+					 }
+	(9) 除数为0													--- java.lang.ArithmeticException : divide by zero
+	(10) 随便使用asList                 --- java.lang.UnsupportedOperationException at,
+																					java.util.AbstractList.remove(AbstractList.java:144) at,
+																					java.util.AbstractList$Itr.remove(AbstractList.java:360) at
+																					java.util.AbstractCollection.remove(AbstractCollection.java:252) at
+			 解析:Arrays.asList()的返回值类型为java.util.Arrays$ArrayList，而不是ArrayList，ArrayList和Arrays$ArrayList都继承了AbstractList类，但是只有ArrayList实现了add和remove方法
+			 			，Arrays$ArrayList没有实现，而是直接抛UnsupportedOperationException。
+			 如：
+			 //下面这三行代码将抛异常
+			 String str = "1,2,3,5,6";
+			 List<String> test = Arrays.asList(str.split(","));
+			 test.remove("1");
+			 //解决办法，将java.util.Arrays$ArrayList转换成ArrayList
+			 String str = "1,2,3,5,6";
+			 List<String> list = Arrays.asList(str.split(","));
+			 List arrayList = new ArrayList(list);
+			 arrayList.remove("1"); 
+			 
+	(11) 类找不到异常(1)   							--- ClassNotFoundException
+			 解析:当我们动态加载一个类的时候，如果这个类在运行时找不到，就会抛这个异常，比如用Class的forName方法。
+	(12) 类找不到异常(2) 								--- NoClassDefFoundError 
+			解析:当我们在B类中声明一个A类的实例，如:ClassA obj = new ClassA();但是打包时B和A分别位于不同的dex中，这时如果在A所在的dex中把A类删除了，那么在运行时执行带这句话时就会抛这个异常。
+					 通过插件化的编程的时候就会牵扯出这个异常，因为要使用到DexClassLoader，如果没有用到插件化，可以检测一下第三方SDK。
+			
+2.Activity相关异常：
+
+	(13) 找不到Activity								  --- android.content.ActivityNotFoundException:No Activity found to handle Intent{...}
+			 解析：URl不是以http开头，就会抛这个异常。
+			 			 Uri uri = Uri.parse("www.baidu.com");
+			 			 Intent intent = new Intent(Intent.ACTION_VIEW,uri);
+			 			 startActivity(intent);
+			 			 
+			 			 打开SD卡上的一个HTML页面时，没有为Intent指定打开该HTML页面所需要的浏览器。
+			 			 
+			 			 Intent intent = new Intent(Intent.ACTION_VIEW,Uri.parse("file://sdcard/101.html"));
+			 			 //intent.setClassName("com.android.browser","com.android.browser.BrowserActivity");//注释了就会抛这个异常
+			 			 startActivity(intent);ss
+			 			 
+			 			 
+	(14) 不能实例化Activity						  --- java.lang.RuntimeException:Unable to instantiate activity ComponentInfo
+			 解析:通常是因为没有在AndroidManifest.xml清单中注册该activity，或者注册的信息和该activity不符合。否则就有可能是系统处于异常状态。
+			 
+	(15) 找不到Service									--- java.lang.RuntimeException:Unable to instantiate receiver		
+			 解析:检测代码中是否有Class。forName("class1")这样的语句。对此，ProGuard会将class1混淆，从而找不到class1这个类。
+			 
+	(16)  不能启动BroadCastReceiver     --- Unable to start receiver
+				解析:在使用Activity以外的content来startActivity，比如BroadcastReceiver，就必须指定为Intent.FLAG_ACTIVITY_NEW_TASK.
+				
+	(17) startActivityForResult不能回传 --- Failure delivering result ResultInfo{who=null,request=0,result=-1}
+			 
+	(18) 猴急的Fragment									--- Fragment not attached to Activity
+			 解析：在Fragment还没有attach到Activity时，调用了诸如getResource()这样的方法。所有在获取资源前，用isAdd来进行判断。
+			 
+3.序列化相关的异常
