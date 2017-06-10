@@ -123,15 +123,15 @@
 															|
 															|		 						           |  EXACTLY   |  AT_MOST   |  UNSPECIFIED
 															|		                       |            |						 |
-															|	           --------------|----------------------------------------
-															|		          dp/px        | EXACTLY    | EXACTLY    | EXACTLY
+															|	           --------------|------------|------------|--------------
+															|		          dp/px        |  EXACTLY   |  EXACTLY   |  EXACTLY
 												chlidLayoutParams	   			       | childSize  | childSize  | childSize
-															|            -------------------------------------------------------	 
-															|		          match_parent | EXACTLY    | AT_MOST    | UNSPECIFIED
+															|            --------------|------------|------------|--------------	 
+															|		          match_parent |  EXACTLY   |  AT_MOST   | UNSPECIFIED
 															|		       			           | parentSize | parentSize |     0
-															|	           -------------------------------------------------------
-															|		          wrap_conent  |AT_MOST     | AT_MOST    | UNSPECIFIED
-															|		       		          	 |parentSize  | parentSize |     0
+															|	           --------------|------------|------------|--------------
+															|		          wrap_conent  |  AT_MOST   |  AT_MOST   | UNSPECIFIED
+															|		       		          	 | parentSize | parentSize |     0
 															|				       	
        
        �ܽ᣺
