@@ -1,0 +1,16 @@
+1.RemoteViews的内部机制
+
+	RemoteViews是在其它进程中显示并更新View界面。RemoteViews没有提供findViewById方法，因此无法直接访问里面的View元素，必须通过RemoteViews所提供的一系列set方法来完成，这是因为，
+	RemoteViews在远程进程中显示，所以没有办法直接findViewById。
+	
+	(1) RemoteViews支持的View类型有:
+			
+			Layout
+				
+				FrameLayout，LinearLayout RelativeLayout。
+			
+			View
+			
+				AnalogClock，Button，Chronometer。ImageButton，ImageView，ProgressBar，TextView，ViewFinder，ListView，GridView，StackView，AdapterViewFinder，ViewStub。
+				
+				
