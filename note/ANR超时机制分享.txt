@@ -1,0 +1,156 @@
+1、Service启动：
+
+		class ActiveServices implements IActivityManager {  
+		    ......  
+		  
+		    private final void realStartServiceLocked(ServiceRecord r,  
+		            ProcessRecord app) throws RemoteException {  
+		          
+		        ......  
+		  
+		        r.app = app;  
+		        r.restartTime = r.lastActivity = SystemClock.uptimeMillis();
+
+		        app.services.add(r);
+		        bumpServiceExecutingLocked(r, execInFg, "create");
+		        mAm.updateLruProcessLocked(app, false, null);
+		        mAm.updateOomAdjLocked();		          
+		        ......  
+		  
+		        try {  
+		  
+		            ......  
+		          
+		            app.thread.scheduleCreateService(r, r.serviceInfo);  
+		              
+		            ......  
+		  
+		        } finally {  
+		  
+		            ......  
+		  
+		        }  
+		  
+		        ......  
+		  
+		    }  
+		  
+		    ......  
+		  
+		} 
+
+		public final void scheduleCreateService(IBinder token,
+		        ServiceInfo info, CompatibilityInfo compatInfo, int processState) {
+		    updateProcessState(processState, false);
+		    CreateServiceData s = new CreateServiceData();
+		    s.token = token;
+		    s.info = info;
+		    s.compatInfo = compatInfo;
+
+		    sendMessage(H.CREATE_SERVICE, s);
+		}
+		
+    case CREATE_SERVICE:
+        Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "serviceCreate");
+        handleCreateService((CreateServiceData)msg.obj);
+        Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+        break;		
+
+	关键函数 -- ActivityThread ：handleCreateService:
+	
+	    private void handleCreateService(CreateServiceData data) {
+        // If we are getting ready to gc after going to the background, well
+        // we are back active so skip it.
+        unscheduleGcIdler();  //如果后台将要进行gc回收，那么这个函数将从任务队列里面移除gc回收任务。
+
+				//得到APK相关信息
+        LoadedApk packageInfo = getPackageInfoNoCheck(
+                data.info.applicationInfo, data.compatInfo);
+        Service service = null;
+        try {
+        	//利用反射创建我们需要启动的Service对象。
+            java.lang.ClassLoader cl = packageInfo.getClassLoader();
+            service = (Service) cl.loadClass(data.info.name).newInstance();
+        } catch (Exception e) {
+            if (!mInstrumentation.onException(service, e)) {
+                throw new RuntimeException(
+                    "Unable to instantiate service " + data.info.name
+                    + ": " + e.toString(), e);
+            }
+        }
+
+        try {
+            if (localLOGV) Slog.v(TAG, "Creating service " + data.info.name);
+						
+						/**
+							    static ContextImpl createAppContext(ActivityThread mainThread, LoadedApk packageInfo) {
+        						if (packageInfo == null) throw new IllegalArgumentException("packageInfo");
+        						return new ContextImpl(null, mainThread,packageInfo, null, null, false, null, null);
+    							}
+						*/
+            ContextImpl context = ContextImpl.createAppContext(this, packageInfo);
+            context.setOuterContext(service);
+
+            Application app = packageInfo.makeApplication(false, mInstrumentation);
+            
+            /**
+            	关键函数：Service ：attach
+					    public final void attach(
+					            Context context,
+					            ActivityThread thread, String className, IBinder token,
+					            Application application, Object activityManager) {
+					        attachBaseContext(context);
+					        mThread = thread;           // NOTE:  unused - remove?
+					        mClassName = className;
+					        mToken = token;
+					        mApplication = application;
+					        mActivityManager = (IActivityManager)activityManager;
+					        mStartCompatibility = getApplicationInfo().targetSdkVersion
+					                < Build.VERSION_CODES.ECLAIR;
+					    }  
+					    
+					    protected void attachBaseContext(Context base) {
+					        if (mBase != null) {
+					            throw new IllegalStateException("Base context already set");
+					        }
+					        mBase = base;
+					    }		
+					    mBase:ContextImpl对象，开启一个新的Activity，Service等对话创建一个ContextImpl对象，里面封装了启动Activity，Service的方法。		              	
+            */
+            service.attach(context, this, data.info.name, data.token, app,
+                    ActivityManagerNative.getDefault());
+                    
+            //执行Service的onCreate方法。       
+            service.onCreate();
+            //使用token存储Service对象
+            mServices.put(data.token, service);
+            try {
+            	
+            	/**
+            		//Retrieve the system's default/global activity manager
+						    static public IActivityManager getDefault() {
+						        return gDefault.get();
+						    }     
+						    
+						           		
+            	*/
+                ActivityManagerNative.getDefault().serviceDoneExecuting(
+                        data.token, 0, 0, 0);
+            } catch (RemoteException e) {
+                // nothing to do.
+            }
+        } catch (Exception e) {
+            if (!mInstrumentation.onException(service, e)) {
+                throw new RuntimeException(
+                    "Unable to create service " + data.info.name
+                    + ": " + e.toString(), e);
+            }
+        }
+    }
+    
+    
+    
+    
+    
+    
+    扩展资源:http://source.android.com/devices/audio/latency.html

@@ -28,8 +28,6 @@ ioctlÊÇÉè±¸Çı¶¯³ÌĞòÖĞ¶ÔÉè±¸µÄI/OÍ¨µÀ½øĞĞ¹ÜÀíµÄº¯Êı¡£ËùÎ½¶ÔI/OÍ¨µÀ½øĞĞ¹ÜÀí£¬¾ÍÊÇ¶
 
 11 sServiceManager = ServiceManagerNative.asInterface(new BinderProxy()); (BinderProxy java¶ÔÏó)
 
-	sServiceManager = ServiceManagerNative.asInterface(new BinderProxy());  Ïàµ±ÓÚ  sServiceManager = new ServiceManagerProxy(new BinderProxy()); ¡¢
-	
-	Binder.java  --     private native final void init(); -- ¾ÍÊÇ´´½¨Ò»¸öJavaBBinderHolder¶ÔÏójbh£¬È»ºó°ÑÕâ¸ö¶ÔÏóµÄµØÖ·±£´æÔÚÉÏÃæµÄBinderÀàµÄmObject³ÉÔ±±äÁ¿ÖĞ¡£
+sServiceManager = ServiceManagerNative.asInterface(new BinderProxy());  Ïàµ±ÓÚ  sServiceManager = new ServiceManagerProxy(new BinderProxy()); 
 
 

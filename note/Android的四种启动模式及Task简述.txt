@@ -1,0 +1,154 @@
+1.概述
+
+	1.1 Android四种Activity启动模式:
+	
+		-在AndroidManifest.xml 的Activity中配置属性，属性name为android：launchMode
+
+		-四种模式分别为standard(默认)、singleTop、singleTask、singleInstance
+
+		-主要对应四种Activity启动的特性
+		
+	1.1 默认的启动模式
+	
+			最简单的启动模式，每次启动Activity都会在当前的task栈中新建一个实例并放到栈顶
+
+			注：这种模式下，即使发起startActivity的那个Activity和即将要启动的Activity是同一个Activity，也会新建对应的实例，返回时按栈的顺序从顶至底返回
+
+	1.2 Android LaunchMode : singleTop
+	
+			特性：如果当前栈顶的activity和即将启动的activity是同一个activity，则不会重新启动activity，而是通过onNewIntent的方式传递数据
+
+			注：在接收到onNewIntent更新了Activity数据之后，此时按返回，会退出此Activity,而不是返回到接收onNewIntent之前那个状态
+
+		  应用场景：只希望栈顶保留一个相同的实例的情况
+
+	1.3 Android LaunchMode : singleTask
+	
+			系统会创建一个新的task，并将此activity实例化到这个新task作为它的根activity；如果在当前在某个任务中已经有一个已存在的activity实例，则不会创建新的实例，而是调用这个activity的onNewIntent()方法（并把该任务调到前台），同一时间只会有一个activity的实例存在
+			
+			"注:"虽然activity在新的task中启动，按返回键还是能回到原来的activity中
+			
+						-系统只会尝试创建一个新的task，而不是创建一个新的task（与FLAG_ACTIVITY_NEW_TASK原理一致)
+						-如果有一个已经存在的实例，系统会将这个task中此实例之上的所有activity弹出栈，无论该实例在哪个任务栈中
+						-activity在新的task中启动后，如果这个task中还有其他activity，按返回键将会按照这个task里的栈的顺序依次返回
+						-启动这种启动类型的activity时，startActivityForResult()会失效（不会收到正确的结果）
+						
+						
+			"如果有一个已经存在的实例，系统会将这个task中此实例之上的所有activity弹出栈"
+			
+							task1
+					 -|-----------------|-                       -|-----------------|-
+						|  ------------   |						              |     						|				
+						|  | Activity3|   |						              |     						|
+						|  ------------   |						              |     						|						
+						|  ------------		|    "startActivity"	  	|     						|
+						|	 | Activity2|   |------------------------>|     						|
+						|  ------------   |			"启动Activity1,	"	  |     						|
+						|  ------------   |			"Activity1启动模式" |  ------------   |
+						|  | Activity1|   |			"singleTask"		    |  | Activity1|   |
+						|  ------------   |					              	|  ------------   |
+					 -|-----------------|-				               -|-----------------|-
+					 
+			"activity在新的task中启动后，如果这个task中还有其他activity，按返回键将会按照这个task里的栈的顺序依次返回"
+			
+							task1									  		task2															    task1									  		task2 
+					 -|-----------------|-       -|-----------------|-               	 -|-----------------|-      -|-----------------|-        
+						|        				  |	        |     						|							      |        				  |		     |     				  	 |				
+						|     						|	        |     						|										|     						|		     |     					 	 |
+						|    						  |	        |     						|		"Activity1启动"	|    						  |			   |     						 |	
+						|  								|   			|     						|		"ActivityB"			|                 |        |  ------------   |
+						|	    						|					|     						|------------------>|									|	  		 |  | ActivityB|   |
+						|     						|				  |     						|		"ActivityB"			|                 |        |  ------------   |
+						|  ------------   |				  |  ------------   |		"启动模式是"		|  ------------   |		     |  ------------   |
+						|  | Activity1|   |				  |  | ActivityA|   |		"singleTask"		|  | Activity1|   |		     |  | ActivityA|   |
+						|  ------------   |		    	|  ------------   |										|  ------------   |		     |  ------------   |
+					 -|-----------------|-		   -|-----------------|-								 -|-----------------|-      -|-----------------|-
+
+           //--------------------------------------------------------------------------------------------------------------//
+							task1					        			task2														    	task1					        			task2
+					 -|-----------------|-       -|-----------------|-               	 -|-----------------|-      -|-----------------|-        
+						|        				  |	        |     						|							      |        				  |		     |     				  	 |				
+						|     						|	        |     						|										|     						|		     |     					 	 |
+						|    						  |	        |     						|	"Activity1启动"	  |    						  |			   |     						 |	
+						|  								|   			|     						|	"应用2的ActivityB"|  ------------   |        |    						 |
+						|	    						|					|     						|------------------>|	 | ActivityB|		|	  		 |     						 |
+						|     						|				  |     						|		",ActivityB"	  |  ------------   |        |     						 |
+						|  ------------   |				  |  ------------   |		"启动模式是"		|  ------------   |		     |  ------------   |
+						|  | Activity1|   |				  |  | ActivityA|   |		"standard"		  |  | Activity1|   |		     |  | ActivityA|   |
+						|  ------------   |		    	|  ------------   |										|  ------------   |		     |  ------------   |
+					 -|-----------------|-		   -|-----------------|-								 -|-----------------|-      -|-----------------|-
+					 
+					 根本原因：android在跳转时，对singleTask启动模式的activity添加了一个flag: FLAG_ACTIVITY_NEW_TASK
+
+				singleTask总结:
+				
+				-如果当前已存在的任务栈中，没有需要跳转的这个activity的实例存在，则创建此activity，创建的activity位于哪个任务栈，由activity的taskAffinity决定。
+        -如果当前有一个任务栈中，存在此activity的实例，则将此任务栈带到前台，并且将此activity之上的activity全部弹出栈，该activity不用重新创建，通过onNewIntent()接收参数
+        -由于以上特性，对于launchMode为singleTask的activity来说，同一时间，只会有一个实例存在
+        -应用场景：launcher 或者类似于具有launcher属性的activity
+
+	1.4 Android LaunchMode : singleInstance
+	
+			-和singleTask很相似，但比singleTask特殊
+			-对于具有singleInstance的activity，一定是独占一个任务栈,即：别的activity启动具有singleInstance的activity时，如果不存在该实例，则一定会新建一个任务栈，将activity实例作为根activity；如果已经有启动的实例，则直接将该实例带到前台，通过onNewIntent传参具有singleInstance的activity启动别的activity时，一定会将即将启动的这个activity挤出栈，让它自己去寻找一个适合的栈，如果没有适合的栈，则新建一个
+		  -应用场景：与应用分离开的activity，比如呼叫来电界面
+		  
+	1.5 Android Task affinity
+	
+	    -Activity倾向于依赖的Task，所属的拥有相同affinity的多个Activity理论同属于一个task，task自身的affinity决定于根Activity的affinity值。
+				1.根据affinity重新为Activity选择宿主task（与allowTaskReparenting属性配合工作）；
+				2.启动一个Activity过程中Intent使用了FLAG_ACTIVITY_NEW_TASK标记，根据affinity查找或创建一个新的具有对应affinity的task。
+				默认情况下，一个应用内的所有Activity都具有相同的affinity，都是从Application（参考<application>的taskAffinity属性）继承而来，而Application默认的affinity是<manifest>中的包名，我们可以为<application>设置taskAffinity属性值，这样可以应用到<application>下的所有<activity>，也可以单独为某个Activity设置taskAffinity
+				
+	1.6 Android Task 相关的Intent flag
+	
+			1、 FLAG_ACTIVITY_NEW_TASK
+			
+			当Intent对象包含这个标记时，系统会寻找或创建一个新的task来放置目标Activity，寻找时依据目标Activity的taskAffinity属性进行匹配，如果找到一个task的taskAffinity与之相同，就将目标Activity压入此task中，如果查找无果，则创建一个新的task，并将该task的taskAffinity设置为目标Activity的taskActivity，将目标Activity放置于此task。
+			如果同一个应用中Activity的taskAffinity都使用默认值或都设置相同值时，应用内的Activity之间的跳转使用这个标记是没有意义的，因为当前应用task就是目标Activity最好的宿主
+
+			特性：如果你试图启动的activity，已经有一个task为此activity启动过了，它不会重新启动一个activity，而是将这个task带到前台。如果想屏蔽这个特性，需要同时使用FLAG_ACTIVITY_MULTIPLE_TASK标签
+
+			2、 FLAG_ACTIVITY_NEW_TASK
+
+							task1									  		task2															    task1									  		task2 
+					 -|-----------------|-       -|-----------------|-               	 -|-----------------|-      -|-----------------|-        
+						|        				  |	        |     						|							      |        				  |		     |     				  	 |				
+						|     						|	        |     						|										|     						|		     |     					 	 |
+						|    						  |	        |     						|	"Activity1启动"	  |    						  |			   |     						 |	
+						|  								|   			|     						|	"应用2的ActivityB"|                 |        |  ------------   |
+						|	    						|					|     						|------------------>|									|	  		 |  | ActivityB|   |
+						|     						|				  |     						|		"跳转加入"			|                 |        |  ------------   |
+						|  ------------   |				  |  ------------   |   "FLAG_ACTIVITY"	|  ------------   |		     |  ------------   |
+						|  | Activity1|   |				  |  | ActivityA|   |		"_NEW_TASK"	  	|  | Activity1|   |		     |  | ActivityA|   |
+						|  ------------   |		    	|  ------------   |										|  ------------   |		     |  ------------   |
+					 -|-----------------|-		   -|-----------------|-								 -|-----------------|-      -|-----------------|-
+
+					//---------------------------------------------------------------------------------------------------------------//
+					
+							task1					        			task2														    	task1					        			task2
+					 -|-----------------|-       -|-----------------|-               	 -|-----------------|-      -|-----------------|-        
+						|        				  |	        |     						|							      |        				  |		     |     				  	 |				
+						|     						|	        |     						|										|     						|		     |     					 	 |
+						|    						  |	        |     						|	"Activity1启动"	  |    						  |			   |     						 |	
+						|  								|   			|     						|	"应用2的ActivityB"|  ------------   |        |    						 |
+						|	    						|					|     						|------------------>|	 | ActivityB|		|	  		 |     						 |
+						|     						|				  |     						|		",不加"	        |  ------------   |        |     						 |
+						|  ------------   |				  |  ------------   |		"FLAG_ACTIVITY"	|  ------------   |		     |  ------------   |
+						|  | Activity1|   |				  |  | ActivityA|   |		"_NEW_TASK"		  |  | Activity1|   |		     |  | ActivityA|   |
+						|  ------------   |		    	|  ------------   |										|  ------------   |		     |  ------------   |
+					 -|-----------------|-		   -|-----------------|-								 -|-----------------|-      -|-----------------|-
+					 
+		3、 FLAG_ACTIVITY_CLEAR_TOP
+		
+				类似于启动模式中的singleTask，带有此flag的activity在启动时，会寻找任务栈中是否有实例存在，如果有，则将其之上的activity全部弹出栈
+				
+				"区别在于:"
+					1. FLAG_ACTIVITY_CLEAR_TOP不像singleTask，系统不会为其添加FLAG_ACTIVITY_NEW_TASK属性，也就是说，如果不手动添加NEW_TASK属性，只能在当前任务栈中查找是否有实例，如果手动添加，则会在taskAffinity指定的任务栈中查找
+					2.singleTask查找到实例后会继续使用该实例，通过onNewIntent传参，而在以下情况下， FLAG_ACTIVITY_CLEAR_TOP会销毁重建activity：launchMode为standard,且没有FLAG_ACTIVITY_SINGLE_TOP标记
+					
+		4、 FLAG_ACTIVITY_SINGLE_TOP
+				与launchMode中的singleTop作用相同
+		5、 FLAG_ACTIVITY_CLEAR_TASK
+				这个标记必须和FLAG_ACTIVITY_NEW_TASK一起使用
+				用于清空跳转后的Activity所属的Task,使得跳转后，该activity一定是这个task的跟activity
