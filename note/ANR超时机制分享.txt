@@ -1,7 +1,195 @@
 1、Service启动：
 
+		class ActivityManagerProxy implements IActivityManager {  
+		    ......  
+		  
+		    public ComponentName startService(IApplicationThread caller, Intent service,  
+		        String resolvedType) throws RemoteException  
+		    {  
+		        Parcel data = Parcel.obtain();  
+		        Parcel reply = Parcel.obtain();  
+		        data.writeInterfaceToken(IActivityManager.descriptor);  
+		        data.writeStrongBinder(caller != null ? caller.asBinder() : null);  
+		        service.writeToParcel(data, 0);  
+		        data.writeString(resolvedType);  
+		        mRemote.transact(START_SERVICE_TRANSACTION, data, reply, 0);  
+		        reply.readException();  
+		        ComponentName res = ComponentName.readFromParcel(reply);  
+		        data.recycle();  
+		        reply.recycle();  
+		        return res;  
+		    }  
+		  
+		    ......  
+		}
+
+		public final class ActivityManagerService extends ActivityManagerNative  
+		                           implements Watchdog.Monitor, BatteryStatsImpl.BatteryCallback {  
+		  
+		    ......  
+		  
+		    public ComponentName startService(IApplicationThread caller, Intent service,  
+		            String resolvedType) {        
+		          // Refuse possible leaked file descriptors  
+		          if (service != null && service.hasFileDescriptors() == true) {  
+		              throw new IllegalArgumentException("File descriptors passed in Intent");  
+		          }  
+		  
+		          synchronized(this) {  
+		              final int callingPid = Binder.getCallingPid();  
+		              final int callingUid = Binder.getCallingUid();  
+		              final long origId = Binder.clearCallingIdentity();  
+		              ComponentName res = startServiceLocked(caller, service,  
+		                  resolvedType, callingPid, callingUid);  
+		              Binder.restoreCallingIdentity(origId);  
+		              return res;  
+		          }  
+		    }  
+		  
+		    ......  
+		  
+		}
+
 		class ActiveServices implements IActivityManager {  
 		    ......  
+		    
+		    
+        ComponentName startServiceLocked(IApplicationThread caller,Intent service, String resolvedType,int callingPid, int callingUid, int userId) {
+        	
+        	......
+        	
+        	return startServiceInnerLocked(smap, service, r, callerFg, addToStarting);
+				}
+    }
+
+    
+      ComponentName startServiceInnerLocked(ServiceMap smap, Intent service,ServiceRecord r, boolean callerFg, boolean addToStarting) {
+       	
+       	......
+       	
+       	String error = bringUpServiceLocked(r, service.getFlags(), callerFg, false);
+        if (error != null) {
+            return new ComponentName("!!", error);
+        }
+       	
+       	
+      }
+        
+        
+          private final String bringUpServiceLocked(ServiceRecord r,int intentFlags, boolean execInFg, boolean whileRestarting) {
+          	
+		        //如果该Service已经启动。
+		        if (r.app != null && r.app.thread != null) {
+		            sendServiceArgsLocked(r, execInFg, false);
+		            return null;
+		        }
+		        //如果正在等待被重新启动，那么什么也不做。
+		        if (!whileRestarting && r.restartDelay > 0) {
+		            return null;
+		        }
+		        
+		        
+				    //清除等待被重新启动的状态。
+		        if (mRestartingServices.remove(r)) {
+		            r.resetRestartCounter();
+		            clearRestartingIfNeededLocked(r);
+		        }
+
+		        //因为我们马上就要启动该Service，因此去掉它的延时属性。
+		        if (r.delayed) {
+		            if (DEBUG_DELAYED_STARTS) Slog.v(TAG_SERVICE, "REM FR DELAY LIST (bring up): " + r);
+		            getServiceMap(r.userId).mDelayedStartList.remove(r);
+		            r.delayed = false;
+		        }
+		        
+		        
+		        // Make sure that the user who owns this service is started.  If not,
+		        // we don't want to allow it to run.
+		        //个人看源码，这里处理通过绑定服务方式启动Service的处理
+		        if (mAm.mStartedUsers.get(r.userId) == null) {
+		            String msg = "Unable to launch app "
+		                    + r.appInfo.packageName + "/"
+		                    + r.appInfo.uid + " for service "
+		                    + r.intent.getIntent() + ": user " + r.userId + " is stopped";
+		            Slog.w(TAG, msg);
+		            bringDownServiceLocked(r);
+		            return msg;
+		        }		        
+          	
+		        // Service is now being launched, its package can't be stopped.
+		        /**
+		        	（个人理解）
+		        	设置包的状态，如果是将要被启动，那么包的状态不能是停止，默认包状态是停止，系统有些广播在应用安装后在没有运行过的情况下接收不到广播，原因应该也是因为包的状态是停止，
+		        	所以，当应用运行时，不管启动四大组件的那个一个，都会设置新的包状态。设置包状态过程会写入文件保存。
+		        	
+		        */
+		        try {
+		            AppGlobals.getPackageManager().setPackageStoppedState(
+		                    r.packageName, false, r.userId);
+		        } catch (RemoteException e) {
+		        } catch (IllegalArgumentException e) {
+		            Slog.w(TAG, "Failed trying to unstop package "
+		                    + r.packageName + ": " + e);
+		        }    
+		        
+		        
+		        final boolean isolated = (r.serviceInfo.flags&ServiceInfo.FLAG_ISOLATED_PROCESS) != 0;//我决定flags就是配置文件里面的android:属性
+		        final String procName = r.processName;
+        		ProcessRecord app;
+		        //如果不是运行在独立的进程。
+		        if (!isolated) {
+		            app = mAm.getProcessRecordLocked(procName, r.appInfo.uid, false);
+		            if (DEBUG_MU) Slog.v(TAG_MU, "bringUpServiceLocked: appInfo.uid=" + r.appInfo.uid
+		                        + " app=" + app);
+		                        
+		            //如果该进程已经启动，那么调用realStartServiceLocked方法            
+		            if (app != null && app.thread != null) {
+		                try {
+		                    app.addPackage(r.appInfo.packageName, r.appInfo.versionCode, mAm.mProcessStats);
+		                    realStartServiceLocked(r, app, execInFg);
+		                    return null;
+		                } catch (RemoteException e) {
+		                    Slog.w(TAG, "Exception when starting service " + r.shortName, e);
+		                }
+
+		                // If a dead object exception was thrown -- fall through to
+		                // restart the application.
+		            }
+		        } else {
+		            // If this service runs in an isolated process, then each time
+		            // we call startProcessLocked() we will get a new isolated
+		            // process, starting another process if we are currently waiting
+		            // for a previous process to come up.  To deal with this, we store
+		            // in the service any current isolated process it is running in or
+		            // waiting to have come up.
+		            app = r.isolatedProc;
+		        }		 
+		        
+		        //如果该Service所对应的进程没有启动，那么首先启动该进程。
+		        //比如启动的Service在单独的进程，该进程肯定没有启动，那么系统会给该Service单独fork一个进程处理。
+		        if (app == null) {
+		            if ((app=mAm.startProcessLocked(procName, r.appInfo, true, intentFlags,
+		                    "service", r.name, false, isolated, false)) == null) {
+		                String msg = "Unable to launch app "
+		                        + r.appInfo.packageName + "/"
+		                        + r.appInfo.uid + " for service "
+		                        + r.intent.getIntent() + ": process is bad";
+		                Slog.w(TAG, msg);
+		                bringDownServiceLocked(r);
+		                return msg;
+		            }
+		            if (isolated) {
+		                r.isolatedProc = app;
+		            }
+		        }
+		        //将该ServiceRecord加入到等待的集合当中，等到新的进程启动之后，再去启动它。
+		        if (!mPendingServices.contains(r)) {
+		            mPendingServices.add(r);
+		        }		                     		
+          	
+          	......
+          }
+        
 		  
 		    private final void realStartServiceLocked(ServiceRecord r,  
 		            ProcessRecord app) throws RemoteException {  
@@ -12,6 +200,75 @@
 		        r.restartTime = r.lastActivity = SystemClock.uptimeMillis();
 
 		        app.services.add(r);
+		        
+		        /**
+		        bumpServiceExecutingLocked：
+				        if (r.executeNesting == 0) {
+				            r.executeFg = fg;
+				            ProcessStats.ServiceState stracker = r.getTracker();
+				            if (stracker != null) {
+				                stracker.setExecuting(true, mAm.mProcessStats.getMemFactorLocked(), now);
+				            }
+				            if (r.app != null) {
+				                r.app.executingServices.add(r);
+				                r.app.execServicesFg |= fg;
+				                if (r.app.executingServices.size() == 1) {
+				                    scheduleServiceTimeoutLocked(r.app);
+				                }
+				            }
+				        } else if (r.app != null && fg && !r.app.execServicesFg) {
+				            r.app.execServicesFg = true;
+				            scheduleServiceTimeoutLocked(r.app);
+				        }		       
+				        
+						    void scheduleServiceTimeoutLocked(ProcessRecord proc) {
+						        if (proc.executingServices.size() == 0 || proc.thread == null) {
+						            return;
+						        }
+						        long now = SystemClock.uptimeMillis();
+						        Message msg = mAm.mHandler.obtainMessage(
+						                ActivityManagerService.SERVICE_TIMEOUT_MSG);
+						        msg.obj = proc;
+						        mAm.mHandler.sendMessageAtTime(msg,
+						                proc.execServicesFg ? (now+SERVICE_TIMEOUT) : (now+ SERVICE_BACKGROUND_TIMEOUT));
+						    }			
+						    
+						    mAm.mHandler是MainHandler对象
+						    
+		            case SERVICE_TIMEOUT_MSG: {
+		                if (mDidDexOpt) {
+		                    mDidDexOpt = false;
+		                    Message nmsg = mHandler.obtainMessage(SERVICE_TIMEOUT_MSG);
+		                    nmsg.obj = msg.obj;
+		                    mHandler.sendMessageDelayed(nmsg, ActiveServices.SERVICE_TIMEOUT);
+		                    return;
+		                }
+		                mServices.serviceTimeout((ProcessRecord)msg.obj);
+		            } break;		
+		            
+		            void serviceTimeout(ProcessRecord proc) {
+		            
+		            	......
+		            	
+			            if (timeout != null && mAm.mLruProcesses.contains(proc)) {
+			                Slog.w(TAG, "Timeout executing service: " + timeout);
+			                anrMessage = "Executing service " + timeout.shortName;
+			            } else {
+			                Message msg = mAm.mHandler.obtainMessage(
+			                        ActivityManagerService.SERVICE_TIMEOUT_MSG);
+			                msg.obj = proc;
+			                mAm.mHandler.sendMessageAtTime(msg, proc.execServicesFg
+			                        ? (nextTime+SERVICE_TIMEOUT) : (nextTime + SERVICE_BACKGROUND_TIMEOUT));
+			            }
+			        		}
+
+					        if (anrMessage != null) {
+					            mAm.appNotResponding(proc, null, null, false, anrMessage);
+					        }		            	
+		            
+		            }				    	        
+				         	
+		        */
 		        bumpServiceExecutingLocked(r, execInFg, "create");
 		        mAm.updateLruProcessLocked(app, false, null);
 		        mAm.updateOomAdjLocked();		          
@@ -21,6 +278,7 @@
 		  
 		            ......  
 		          
+		           //通知应用端创建Service对象。
 		            app.thread.scheduleCreateService(r, r.serviceInfo);  
 		              
 		            ......  
@@ -34,11 +292,54 @@
 		        ......  
 		  
 		    }  
+		    //会调用 onStartCommand 方法。
+		    /**
+			    private class ApplicationThread extends ApplicationThreadNative {
+
+			        public final void scheduleServiceArgs(IBinder token, boolean taskRemoved, int startId,
+			            int flags ,Intent args) {
+			            ServiceArgsData s = new ServiceArgsData();
+			            s.token = token;
+			            s.taskRemoved = taskRemoved;
+			            s.startId = startId;
+			            s.flags = flags;
+			            s.args = args;
+			            sendMessage(H.SERVICE_ARGS, s);
+			        }
+			        
+			        //ActivityThread
+                case SERVICE_ARGS:
+                    Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "serviceStart");
+                    handleServiceArgs((ServiceArgsData)msg.obj);
+                    Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+                    break;			        
+			   }		    
+		    */
+		   sendServiceArgsLocked(r, execInFg, true);
 		  
 		    ......  
 		  
 		} 
-
+		
+	
+	 //ApplicationThreadNative : scheduleCreateService
+	 
+    public final void scheduleCreateService(IBinder token, ServiceInfo info,
+            CompatibilityInfo compatInfo, int processState) throws RemoteException {
+        Parcel data = Parcel.obtain();
+        data.writeInterfaceToken(IApplicationThread.descriptor);
+        data.writeStrongBinder(token);
+        info.writeToParcel(data, 0);
+        compatInfo.writeToParcel(data, 0);
+        data.writeInt(processState);
+        mRemote.transact(SCHEDULE_CREATE_SERVICE_TRANSACTION, data, null,
+                IBinder.FLAG_ONEWAY);
+        data.recycle();
+    }
+    
+    
+    	 
+	 //ActivityThread : scheduleCreateService
 		public final void scheduleCreateService(IBinder token,
 		        ServiceInfo info, CompatibilityInfo compatInfo, int processState) {
 		    updateProcessState(processState, false);
@@ -128,6 +429,7 @@
             	
             	/**
             		//Retrieve the system's default/global activity manager
+            		//其实返回的是：ActivityManagerService对象
 						    static public IActivityManager getDefault() {
 						        return gDefault.get();
 						    }     
@@ -148,7 +450,65 @@
         }
     }
     
+        private void serviceDoneExecutingLocked(ServiceRecord r, boolean inDestroying,
+            boolean finishing) {
+            	
+            	......
+            	
+            	//如果沒有执行的服务，这移除消息
+                if (r.app.executingServices.size() == 0) {
+                    if (DEBUG_SERVICE || DEBUG_SERVICE_EXECUTING) Slog.v(TAG,
+                            "No more executingServices of " + r.shortName);
+                    mAm.mHandler.removeMessages(ActivityManagerService.SERVICE_TIMEOUT_MSG, r.app);
+                } else if (r.executeFg) {
+                    // Need to re-evaluate whether the app still needs to be in the foreground.
+                    for (int i=r.app.executingServices.size()-1; i>=0; i--) {
+                        if (r.app.executingServices.valueAt(i).executeFg) {
+                            r.app.execServicesFg = true;
+                            break;
+                        }
+                    }
+                }     
+                       	
+            ......	
+        }
     
+    
+    private void handleServiceArgs(ServiceArgsData data) {
+        Service s = mServices.get(data.token);
+        if (s != null) {
+            try {
+                if (data.args != null) {
+                    data.args.setExtrasClassLoader(s.getClassLoader());
+                    data.args.prepareToEnterProcess();
+                }
+                int res;
+                if (!data.taskRemoved) {
+                    res = s.onStartCommand(data.args, data.flags, data.startId);
+                } else {
+                    s.onTaskRemoved(data.args);
+                    res = Service.START_TASK_REMOVED_COMPLETE;
+                }
+
+                QueuedWork.waitToFinish();
+
+                try {
+                    ActivityManagerNative.getDefault().serviceDoneExecuting(
+                            data.token, 1, data.startId, res);
+                } catch (RemoteException e) {
+                    // nothing to do.
+                }
+                ensureJitEnabled();
+            } catch (Exception e) {
+                if (!mInstrumentation.onException(s, e)) {
+                    throw new RuntimeException(
+                            "Unable to start service " + s
+                            + " with " + data.args + ": " + e.toString(), e);
+                }
+            }
+        }
+        
+      }		
     
     
     
