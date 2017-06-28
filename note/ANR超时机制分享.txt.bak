@@ -624,7 +624,6 @@
       }		
       
       
--------------------------------------------------
       
       
       //--------------    IBinder b = ServiceManager.getService("activity");
