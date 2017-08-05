@@ -1,0 +1,36 @@
+
+/**Create**/
+Observable.create(source)  ----> new ObservableCreate<T>(source)   创建"发布者"实例
+
+Observable.create(source).subscribe(observer)                      创建"订阅在"实例,开始订阅
+
+					---> subscribeActual(observer)                           开始订阅
+					
+					备注:创建发射器                         ---  CreateEmitter<T> parent = new CreateEmitter<T>(observer);
+							 调用"订阅者"onSubscribe方法        ---  observer.onSubscribe(parent);
+							 调用"发布者"subscribe方法发布消息  ---  source.subscribe(parent);
+							 
+							 ---> 发送下一个消息                ---  parent.onNext(1);
+							 ---> 订阅者接收下一个消息          ---  observer.onNext(t);
+							 
+时序图:
+
+	Activity.class				 Observable.class           ObservableCreate.class             ObservableCreate.CreateEmitter.class
+								
+		|---------------->	 create(source)    ---->    subscribe(observer)       ----|           
+	onSubscribe	 <---------(订阅者对象方法)---------  subscribeActual(observer) <---|   
+	subscribe    <---------(发布者对象方法)--------------------|  
+	   |------------------------------------------------------------------------------------------>  onNext(T t)
+	onNext(T t)	 <------------------------------(订阅者对象方法)----------------------------------------|
+	
+类继承关系:
+
+abstract class Observable<T> implements ObservableSource<T> 
+
+final class ObservableCreate<T> extends Observable<T>  ---  abstract class Observable<T> implements ObservableSource<T>
+
+final class CreateEmitter<T> extends AtomicReference<Disposable> implements ObservableEmitter<T>, Disposable
+
+						interface ObservableEmitter<T> extends Emitter<T>
+						
+/**Map**/
