@@ -10,3 +10,7 @@
 ####<font color=#0099ff>adb 查看apk信息(版本号，权限，AndroidManifest等信息)：</font>
 
 adb shell dumpsys package  + 包名
+
+####<font color=#0099ff>adb 输入字符串到Android设备</font>
+
+adb shell input text + （字符串） 例如：adb shell input text pds
