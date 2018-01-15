@@ -14,3 +14,6 @@ adb shell dumpsys package  + 包名
 ####<font color=#0099ff>adb 输入字符串到Android设备</font>
 
 adb shell input text + （字符串） 例如：adb shell input text pds
+
+####<font color=#0099ff>adb 模拟键盘事件</font>
+adb shell input keyevent + 键值
